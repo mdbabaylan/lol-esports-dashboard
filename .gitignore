@@ -40,3 +40,7 @@ test-*.cjs
 test-*.js
 server-test.cjs
 server-debug.cjs
+
+# Project documentation (personal notes)
+MEMORY.md
+TODO.md

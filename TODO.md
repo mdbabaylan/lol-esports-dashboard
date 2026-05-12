@@ -31,13 +31,19 @@
 - [x] Store in SQLite (98 LoL bets imported)
 - [x] Frontend: Update My Bets page to use API instead of mock data
 
-### 3. Match Data Integration ✅
+### 3. Match Data Integration ✅ COMPLETE
 - [x] **AI Agent JSON Feed** - `D:\hetzner\Sync\lol-schedule.json`
 - [x] Create `/api/schedule` endpoint to read the JSON file
 - [x] Frontend: Display upcoming matches with date grouping
 - [x] Filter by status: All, Live, Scheduled, Finished
-- [ ] Store match data in SQLite `matches` table (when needed for historical data)
-- [ ] Auto-refresh indicator
+- [x] Team names displayed in UPPERCASE
+
+### 4. Query Betting Data for Team Insights ⏳ NEXT
+- [ ] API: `/api/bets/team/:teamName` - Get all bets for a specific team
+- [ ] API: `/api/bets/h2h/:teamA/:teamB` - Get betting history between two teams
+- [ ] Frontend: Show betting insights on Matches page (win rate vs opponent, avg edge)
+- [ ] Frontend: Show team betting stats on H2H page
+- [ ] Calculate: Historical win rate, average edge, profit/loss per team
 
 ### 4. Oracle Elixir Harvester (Backup/Fallback)
 - [ ] Python script: `server/scraper/oracle_elixir.py`

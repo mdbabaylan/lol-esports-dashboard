@@ -36,13 +36,25 @@ POST /api/matches           # Add new match
 - **Avg Win:** +$12.07 | **Avg Loss:** -$10.17
 - **Avg Edge:** 1.22%
 
-## Match Data Source ✅
+## Completed Features ✅
+
+### 1. My Bets (CSV Import)
+- **Status:** Complete
+- **Data:** 98 LoL bets imported from CSV
+- **Display:** Full betting history with stats, edge analysis, P&L tracking
+- **API:** `/api/bets`, `/api/bets/stats`
+
+### 2. Upcoming Matches (JSON Feed)
 - **Source:** `D:\hetzner\Sync\lol-schedule.json` (AI Agent JSON feed)
-- **Status:** Integrated
-- **Format:** JSON file with upcoming matches
-- **Update Frequency:** Daily via cronjob (user's AI agent)
-- **API Endpoint:** `GET /api/schedule` - Returns upcoming matches
-- **Refresh:** `POST /api/schedule/refresh` - Force re-read the file
+- **Status:** Complete
+- **Display:** Matches grouped by date, league color coding, filter tabs
+- **API:** `/api/schedule`
+
+## Next Priority
+**Query SQLite betting data for team insights:**
+- When viewing a team in Matches/H2H, query their betting history
+- Show: Win rate vs that team, average edge, historical performance
+- Use existing `bets` table (already has 98 bets with team_a/team_b)
 
 ## API Endpoints (Updated)
 ```
