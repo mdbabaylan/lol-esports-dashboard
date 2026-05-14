@@ -1,37 +1,8 @@
-// Polymarket API Service
-// Fetches user positions and filters for LoL-related markets
+// Polymarket Data API Service
+// Uses https://data-api.polymarket.com - NO authentication required!
+// Docs: https://docs.polymarket.com/api-reference/introduction
 
-// Use local proxy server in development
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001'
-const POLYMARKET_PROXY_URL = `${API_BASE_URL}/api/polymarket`
-
-// GraphQL query to get user positions
-const GET_USER_POSITIONS = `
-  query GetUserPositions($walletAddress: String!) {
-    user(walletAddress: $walletAddress) {
-      positions {
-        market {
-          id
-          question
-          description
-          slug
-          category
-          tags
-          outcomes
-          outcomePrices
-          endDate
-          status
-        }
-        outcomeIndex
-        quantity
-        avgPrice
-        value
-        pnl
-        pnlPercent
-      }
-    }
-  }
-`
+const DATA_API_BASE = 'https://data-api.polymarket.com'
 
 // LoL-related keywords to filter markets
 const LOL_KEYWORDS = [
@@ -67,21 +38,25 @@ const LOL_KEYWORDS = [
   'team vitality',
   'karmine corp',
   'giantx',
+  'esports',
 ]
 
 /**
  * Check if a market is LoL-related
  */
-const isLoLMarket = (market) => {
-  const text = `${market.question} ${market.description || ''} ${market.category || ''} ${(market.tags || []).join(' ')}`.toLowerCase()
+const isLoLMarket = (title) => {
+  if (!title) return false
+  const text = title.toLowerCase()
   return LOL_KEYWORDS.some(keyword => text.includes(keyword.toLowerCase()))
 }
 
 /**
- * Extract teams from market question
+ * Extract teams from market title
  * Example: "T1 vs Gen.G - LCK Spring 2026" -> { teamA: "T1", teamB: "Gen.G" }
  */
-const extractTeams = (question) => {
+const extractTeams = (title) => {
+  if (!title) return { teamA: 'Team A', teamB: 'Team B' }
+  
   const vsPatterns = [
     /(.+?)\s+vs\.?\s+(.+?)(?:\s+-|\s*\(|$)/i,
     /(.+?)\s+v\.?\s+(.+?)(?:\s+-|\s*\(|$)/i,
@@ -89,7 +64,7 @@ const extractTeams = (question) => {
   ]
   
   for (const pattern of vsPatterns) {
-    const match = question.match(pattern)
+    const match = title.match(pattern)
     if (match) {
       return {
         teamA: match[1].trim(),
@@ -98,84 +73,157 @@ const extractTeams = (question) => {
     }
   }
   
-  return { teamA: 'Team A', teamB: 'Team B' }
+  return { teamA: title, teamB: 'Unknown' }
+}
+
+/**
+ * Extract league from title or return default
+ */
+const extractLeague = (title) => {
+  if (!title) return null
+  const text = title.toLowerCase()
+  if (text.includes('lck')) return 'LCK'
+  if (text.includes('lpl')) return 'LPL'
+  if (text.includes('lec')) return 'LEC'
+  if (text.includes('lcs')) return 'LCS'
+  if (text.includes('msi')) return 'MSI'
+  if (text.includes('worlds')) return 'Worlds'
+  return 'LoL'
 }
 
 /**
  * Map Polymarket position to our bet format
  */
-const mapPositionToBet = (position, index) => {
-  const market = position.market
-  const teams = extractTeams(market.question)
-  const outcomes = market.outcomes || ['Yes', 'No']
-  const outcomePrices = market.outcomePrices ? JSON.parse(market.outcomePrices) : [0.5, 0.5]
+const mapPositionToBet = (position, index, isClosed = false) => {
+  const teams = extractTeams(position.title)
+  const league = extractLeague(position.title)
   
-  // Determine if user bet on Team A or Team B
-  const betOn = position.outcomeIndex === 0 ? teams.teamA : teams.teamB
-  const odds = position.avgPrice > 0 ? (1 / position.avgPrice).toFixed(2) : '1.00'
+  // Calculate odds from average price
+  const avgPrice = position.avgPrice || 0
+  const odds = avgPrice > 0 ? (1 / avgPrice).toFixed(2) : '1.00'
   
-  // Calculate P&L
-  const stake = position.quantity || 0
-  const profit = position.pnl || 0
-  const result = profit > 0 ? 'win' : profit < 0 ? 'loss' : 'pending'
+  // Determine result based on P&L
+  const pnl = isClosed ? position.realizedPnl : position.cashPnl
+  const result = pnl > 0 ? 'WIN' : pnl < 0 ? 'LOSS' : 'PENDING'
+  
+  // Stake calculation
+  const stake = position.totalBought || position.initialValue || 0
   
   return {
-    id: `pm-${index}`,
-    matchId: market.id,
-    event: market.category || 'Polymarket',
-    teamA: teams.teamA,
-    teamB: teams.teamB,
-    betOn: betOn,
+    id: `pm-${isClosed ? 'closed' : 'open'}-${index}`,
+    matchId: position.conditionId,
+    event: league,
+    league: league,
+    team_a: teams.teamA,
+    team_b: teams.teamB,
+    betOn: position.outcome || 'Unknown',
     odds: parseFloat(odds),
     stake: stake,
     result: result,
-    payout: result === 'win' ? stake + profit : result === 'loss' ? 0 : null,
-    profit: profit,
-    date: market.endDate || new Date().toISOString(),
-    settledDate: market.status === 'RESOLVED' ? market.endDate : null,
-    marketUrl: `https://polymarket.com/event/${market.slug}`,
-    question: market.question,
+    outcome: result,
+    pnl: pnl,
+    profit: pnl,
+    date: position.endDate || new Date().toISOString(),
+    settledDate: isClosed ? new Date(position.timestamp * 1000).toISOString() : null,
+    marketUrl: `https://polymarket.com/event/${position.eventSlug || position.slug}`,
+    match_description: position.title,
+    category: position.outcome,
+    market_odds: position.curPrice || avgPrice,
+    my_prob: avgPrice,
+    edge: 0, // Will be calculated if we compare to market odds
+    // Additional Polymarket-specific fields
+    currentPrice: position.curPrice,
+    avgPrice: avgPrice,
+    currentValue: position.currentValue,
+    initialValue: position.initialValue,
+    percentPnl: isClosed ? position.percentRealizedPnl : position.percentPnl,
+    size: position.size,
+    redeemable: position.redeemable,
+    mergeable: position.mergeable,
   }
 }
 
 /**
- * Fetch user's Polymarket positions via local proxy
+ * Fetch user's current (open) positions from Polymarket Data API
+ * No authentication required!
  */
-export const fetchPolymarketPositions = async (walletAddress) => {
+export const fetchCurrentPositions = async (walletAddress) => {
   try {
-    const response = await fetch(POLYMARKET_PROXY_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        query: GET_USER_POSITIONS,
-        variables: { walletAddress: walletAddress.toLowerCase() },
-      }),
-    })
+    const url = new URL(`${DATA_API_BASE}/positions`)
+    url.searchParams.append('user', walletAddress.toLowerCase())
+    url.searchParams.append('limit', '500')
+    
+    const response = await fetch(url.toString())
     
     if (!response.ok) {
       throw new Error(`HTTP error! status: ${response.status}`)
     }
     
-    const data = await response.json()
-    
-    if (data.errors) {
-      console.error('GraphQL errors:', data.errors)
-      throw new Error(data.errors[0].message)
-    }
-    
-    const positions = data.data?.user?.positions || []
+    const positions = await response.json()
     
     // Filter for LoL markets only
-    const lolPositions = positions.filter(pos => isLoLMarket(pos.market))
+    const lolPositions = positions.filter(pos => isLoLMarket(pos.title))
     
     // Map to our bet format
-    const bets = lolPositions.map((pos, index) => mapPositionToBet(pos, index))
+    const bets = lolPositions.map((pos, index) => mapPositionToBet(pos, index, false))
     
     return bets
   } catch (error) {
-    console.error('Error fetching Polymarket positions:', error)
+    console.error('Error fetching current positions:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch user's closed positions from Polymarket Data API
+ * No authentication required!
+ */
+export const fetchClosedPositions = async (walletAddress) => {
+  try {
+    const url = new URL(`${DATA_API_BASE}/closed-positions`)
+    url.searchParams.append('user', walletAddress.toLowerCase())
+    url.searchParams.append('limit', '500')
+    
+    const response = await fetch(url.toString())
+    
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+    
+    const positions = await response.json()
+    
+    // Filter for LoL markets only
+    const lolPositions = positions.filter(pos => isLoLMarket(pos.title))
+    
+    // Map to our bet format
+    const bets = lolPositions.map((pos, index) => mapPositionToBet(pos, index, true))
+    
+    return bets
+  } catch (error) {
+    console.error('Error fetching closed positions:', error)
+    throw error
+  }
+}
+
+/**
+ * Fetch all LoL positions (both current and closed)
+ */
+export const fetchPolymarketPositions = async (walletAddress) => {
+  try {
+    const [current, closed] = await Promise.all([
+      fetchCurrentPositions(walletAddress).catch(err => {
+        console.warn('Failed to fetch current positions:', err)
+        return []
+      }),
+      fetchClosedPositions(walletAddress).catch(err => {
+        console.warn('Failed to fetch closed positions:', err)
+        return []
+      }),
+    ])
+    
+    return [...current, ...closed]
+  } catch (error) {
+    console.error('Error fetching all positions:', error)
     throw error
   }
 }
@@ -184,23 +232,27 @@ export const fetchPolymarketPositions = async (walletAddress) => {
  * Calculate stats from Polymarket bets
  */
 export const calculatePolymarketStats = (bets) => {
-  const settledBets = bets.filter((bet) => bet.result !== 'pending')
+  const settledBets = bets.filter((bet) => bet.result !== 'PENDING')
   const totalBets = settledBets.length
-  const wins = settledBets.filter((bet) => bet.result === 'win').length
-  const losses = settledBets.filter((bet) => bet.result === 'loss').length
+  const wins = settledBets.filter((bet) => bet.result === 'WIN').length
+  const losses = settledBets.filter((bet) => bet.result === 'LOSS').length
+  const pending = bets.filter((bet) => bet.result === 'PENDING').length
   const winRate = totalBets > 0 ? (wins / totalBets) * 100 : 0
-  const totalProfit = settledBets.reduce((sum, bet) => sum + (bet.profit || 0), 0)
+  const totalProfit = settledBets.reduce((sum, bet) => sum + (bet.pnl || 0), 0)
   const totalStaked = settledBets.reduce((sum, bet) => sum + bet.stake, 0)
   const roi = totalStaked > 0 ? (totalProfit / totalStaked) * 100 : 0
 
   return {
-    totalBets,
+    totalBets: totalBets + pending,
     wins,
     losses,
+    pending,
     winRate: winRate.toFixed(1),
-    totalProfit: totalProfit.toFixed(2),
+    totalPnl: totalProfit.toFixed(2),
     totalStaked: totalStaked.toFixed(2),
     roi: roi.toFixed(1),
+    avgWin: wins > 0 ? (settledBets.filter(b => b.pnl > 0).reduce((s, b) => s + b.pnl, 0) / wins).toFixed(2) : 0,
+    avgLoss: losses > 0 ? (settledBets.filter(b => b.pnl < 0).reduce((s, b) => s + b.pnl, 0) / losses).toFixed(2) : 0,
   }
 }
 

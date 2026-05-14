@@ -2,69 +2,88 @@
 
 ## Current Stack
 - Frontend: React 19 + Vite + MUI v5
-- Backend: Express (proxy server)
-- Data: Mock data (needs real database)
+- Backend: Express + SQLite
+- Data: Oracle Elixir (53k rows) + Polymarket Data API (live positions) + AI Agent JSON Feed
 
-## Completed
-- [x] Matches page (vertical table by event)
-- [x] Head-to-Head page (team comparison)
-- [x] Players page (search + role filter)
-- [x] My Bets page (stats + table layout)
-- [x] Dark theme (zinc/slate palette)
-- [x] Express proxy server (CORS handling)
+## Completed ✅
 
-## Next Features
+### Core Infrastructure
+- [x] React + Vite frontend with dark theme
+- [x] Express backend with CORS
+- [x] SQLite database: `data/lol_esports.db` - Oracle Elixir match data (53k rows, 165 cols)
 
-### 1. SQLite Database ✅
-- [x] Create `server/database/db.cjs` - SQLite wrapper
-- [x] Create `server/database/schema.sql`:
-  - `matches` - match_id, date, team_a, team_b, score_a, score_b, tournament, patch
-  - `team_stats` - team, date, stat_type, value (wins, losses, kda, gold, etc.)
-  - `player_stats` - player, team, date, kills, deaths, assists, cs, gold
-  - `bets` - id, date, team_a, team_b, bet_on, odds, stake, result, profit
-  - `harvest_log` - source, last_run, status
+### Data Sources
+- [x] **Polymarket Data API** - Live LoL positions via public API
+  - `https://data-api.polymarket.com/positions` - Current positions
+  - `https://data-api.polymarket.com/closed-positions` - Settled positions
+  - No authentication required!
+- [x] **AI Agent JSON Feed** - `D:\hetzner\Sync\lol-schedule.json` for upcoming matches
+- [x] **Oracle Elixir CSV** - `D:\hetzner\wiki\data\oracle_raw\oracle_lol_esports.csv`
+  - Python import script: `data/import_csv_to_sqlite.py`
+  - Auto-sync via Syncthing from Hetzner server
 
-### 2. My Bets CSV Upload ✅
-- [x] Backend: `/api/bets` endpoint with filters
-- [x] Backend: `/api/bets/stats` endpoint with league/monthly breakdown
-- [x] Parse Polymarket CSV format (`import-bets.cjs`)
-- [x] Store in SQLite (98 LoL bets imported)
-- [x] Frontend: Update My Bets page to use API instead of mock data
+### Pages & Features
+- [x] **Matches Page** - Upcoming matches from JSON feed, filter by status
+- [x] **Team Stats Page** - Oracle data with win rates, KDA, gold diff @15
+- [x] **Head-to-Head Page** - Team comparison (needs Oracle integration)
+- [x] **Players Page** - Search + role filter (needs Oracle integration)
+- [x] **My Bets Page** - Live Polymarket positions with real-time PnL
+  - [x] Fetch current positions from Data API
+  - [x] Fetch closed positions from Data API
+  - [x] Filter for LoL-related markets
+  - [x] Display P&L, prices, status
+  - [x] Direct links to Polymarket markets
+- [x] **Team Detail Page** - Individual team details with roster and recent matches
+- [x] **Team Logo System** - `public/teams/{league}/{team}.{png,jpg,jpeg}`
 
-### 3. Match Data Integration ✅ COMPLETE
-- [x] **AI Agent JSON Feed** - `D:\hetzner\Sync\lol-schedule.json`
-- [x] Create `/api/schedule` endpoint to read the JSON file
-- [x] Frontend: Display upcoming matches with date grouping
-- [x] Filter by status: All, Live, Scheduled, Finished
-- [x] Team names displayed in UPPERCASE
+### API Endpoints
+- [x] `/api/schedule` - Upcoming matches from JSON
+- [x] `/api/oracle/teams` - Team stats from Oracle data
+- [x] `/api/oracle/teams/:teamName` - Detailed team info + roster
+- [x] `/api/oracle/players` - Player stats with KDA, DPM, CSPM
+- [x] `/api/oracle/h2h/:teamA/:teamB` - Head-to-head history
+- [x] `/api/oracle/leagues` - Available leagues
 
-### 4. Query Betting Data for Team Insights ⏳ NEXT
-- [ ] API: `/api/bets/team/:teamName` - Get all bets for a specific team
-- [ ] API: `/api/bets/h2h/:teamA/:teamB` - Get betting history between two teams
-- [ ] Frontend: Show betting insights on Matches page (win rate vs opponent, avg edge)
-- [ ] Frontend: Show team betting stats on H2H page
-- [ ] Calculate: Historical win rate, average edge, profit/loss per team
+## In Progress / Next Features
 
-### 4. Oracle Elixir Harvester (Backup/Fallback)
-- [ ] Python script: `server/scraper/oracle_elixir.py`
-- [ ] Pull match data from Oracle's Elixir CSV
-- [ ] Store per-match stats (not cumulative)
-- [ ] Frontend: "Harvest Data" button
-- [ ] Backend: `/api/harvest/oracle` endpoint
+### Team Insights (Betting Context)
+- [ ] Show Polymarket positions on Team Stats page (your bets vs this team)
+- [ ] Show Oracle stats on Matches page (team form, recent performance)
+- [ ] Combine betting + Oracle data for H2H analysis
 
-### 4. Dynamic Team Stats
-- [ ] API: `/api/teams/:team/stats?from=DATE&to=DATE`
-- [ ] Calculate: win rate, KDA, gold diff, form (W/L streak)
-- [ ] Recent form vs cumulative stats
-- [ ] Frontend: Date range picker on H2H page
+### Enhanced Stats
+- [ ] **Series Win Rate** (vs current Game Win Rate)
+- [ ] **Recent Form** - Last 5/10 games trend
+- [ ] **Date Range Filtering** - Form over specific periods
+- [ ] **Player Stats Page** - Full Oracle player data integration
 
-### 5. H2H with Date Filter
-- [ ] API: `/api/h2h/:teamA/:teamB?from=DATE&to=DATE`
-- [ ] Weighted by recency
-- [ ] Show form trends for both teams
+### MyBets Enhancements
+- [ ] Auto-refresh positions every 30 seconds
+- [ ] Price change alerts (when market moves significantly)
+- [ ] Filter by league (LCK, LPL, etc.)
+- [ ] Sort by P&L, date, or stake
+- [ ] Export positions to CSV
+
+### UI/UX
+- [ ] Team logo uploads (user will add to `public/teams/`)
+- [ ] Mobile responsiveness improvements
+- [ ] Dark/light theme toggle
+
+### Team Logos - Missing (Need to Fetch)
+
+**LCK (5/10 teams have logos):**
+✅ Have: BNK FEARX, Dplus Kia, HANJIN BRION, Kiwoom DRX, KT Rolster
+❌ Missing: T1, Gen.G, DN SOOPers, Nongshim RedForce, Hanwha Life Esports
+
+**LPL (3/14 teams have logos):**
+✅ Have: EDward Gaming, JD Gaming, LNG Esports
+❌ Missing: Weibo Gaming, Invictus Gaming, Top Esports, Anyone's Legend, Bilibili Gaming, Ninjas in Pyjamas, Team WE, Oh My God, LGD Gaming, ThunderTalk Gaming, Ultra Prime
+
+**Note:** `TeamLogo.jsx` normalize function updated to convert team names to hyphenated format (e.g., "JD Gaming" → `jd-gaming.png`)
 
 ## Notes
 - Oracle Elixir data: https://oracleselixir.com/download
-- Polymarket API requires auth (use CSV export instead)
+- Data sync: Hetzner cronjob → Syncthing → `D:\hetzner\wiki\data\oracle_raw\`
 - SQLite is file-based, no separate server needed
-- Keep data lightweight (years of matches = ~50MB)
+- Team logos: Add to `public/teams/{LPL,LCK,LEC,LCS,...}/{teamname}.{png,jpg}`
+- Polymarket Data API docs: https://docs.polymarket.com/api-reference/introduction
